@@ -3,9 +3,9 @@ title: "Analysis of Climate Factors in Natural Disaster Patterns"
 author: "Samuel Van Gorden"
 date: "3/13/2022"
 output:
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
 always_allow_html: yes
 ---
 
@@ -48,7 +48,7 @@ All of the coding for the project was done in R using RStudio.  Plots were made 
 
 # Results and Analysis
 
-### $\text{\underline{Relationship between Land Average Temperature and Quantity of Natural Disasters}}$
+### [Relationship\ between\ Land\ Average\ Temperature\ and\ Quantity\ of\ Natural\ Disasters]{.underline}
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
 # Load libraries and data
@@ -61,6 +61,15 @@ library(plotly)
 library(forecast)
 library(MASS)
 library(caret)
+library(nnet)
+#library(survey)
+library(effects)
+library(tidyr)
+library(MVN)
+library(e1071)
+library(imbalance)
+
+knitr::opts_chunk$set(comment = NA)
 
 disasters1.data <- read.csv('./data/DISASTERS/1900_2021_DISASTERS.xlsx - emdat data.csv')
 disasters2.data <- read.csv('./data/DISASTERS/1970-2021_DISASTERS.xlsx - emdat data.csv')
@@ -151,7 +160,7 @@ In essence, the number of disasters is roughly constantly low for temperatures o
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
 # Linear model with response number of disasters and predictor average land temperature using sigmoid
-num.disasters.v.temp <- lm(n ~ sigmoid(LandAverageTemperature - 50, "logistic"), data = temp.and.disasters)
+num.disasters.v.temp <- lm(n ~ sigmoid::sigmoid(LandAverageTemperature - 50, "logistic"), data = temp.and.disasters)
 p1 <- ggplot(data = temp.and.disasters) +
   labs(title = "Land Average Temperature by Year (Fitted)", x = "Temperature", y = "Disasters") +
   theme(plot.title = element_text(hjust = 0.5)) +
@@ -171,7 +180,13 @@ We attempt to model the data using two methods.  The first plot above shows an a
 
 The second plot utilizes splines, which are locally generated cubics.  We experimented with the parameter *nknots* for the R function smooth.spline and determined that a value of 6 produced the best fit.  While the first plot was not bad, the method of splines generated a model that much more closely matches the S-shaped curve we were looking for.
 
-### $\text{\underline{Time Series Analysis of Land Average Temperature}}$
+The parameter estimates for the generated spline model are as follows:
+
+* Smoothing Parameter s=`r spline.model$spar` ($\lambda$=`r spline.model$lambda`)
+
+* Cubic Coefficients: `r spline.model$fit$coef`
+
+### [Time\ Series\ Analysis\ of\ Land\ Average\ Temperature]{.underline}
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
 ## Time series projections ##
@@ -193,7 +208,7 @@ pacf(diff(temp.and.disasters$LandAverageTemperature, lag = 1), main = "PACF (fir
 par(orig.par)
 ```
 
-We obtain the ACF and PACF plots for the raw data and two different methods of time series generation.  ACF and PACF plots can be used to determine the Auto-Regressive (AR) and Moving Average (MA) components, respectively, of a time series model.  The ACF and PACF plots for the original data, "rough" part of the data, and first difference of the data (i.e. $Y_t = X_t - X_{t-1}$, where $X_t$ is the original data series) are displayed above.  The first ACF/PACF plots for the original series show no discernable MA component and a possible AR component of order 2.
+We obtain the ACF and PACF plots for the raw data and two different methods of time series generation.  ACF and PACF plots can be used to determine the Moving Average (MA) and Auto-Regressive (AR) components, respectively, of a time series model.  The ACF and PACF plots for the original data, "rough" part of the data, and first difference of the data (i.e. $Y_t = X_t - X_{t-1}$, where $X_t$ is the original data series) are displayed above.  The first ACF/PACF plots for the original series show no discernable MA component and a possible AR component of order 2.
 
 However, We can probably improve upon this model by analyzing three different methods of handling time series data.  The first method involves subtracting off the "trend" part of the data and analyzing the remaining "rough" part of the data.  From the ACF plot, it can be determined that the rough part has an MA component of order 3.  The PACF plot gives no relevant information.
 
@@ -215,11 +230,17 @@ temp.fc.rpt <- temp.fc.rough$mean + predict(temp.trend$fit, 2016:2025)$y
 
 # Plot the fitted models and forecasts
 par(mfrow = c(3,2), mar = c(3,4,3,2))
-plot.ts(fitted(temp.ts.rough) + temp.trend$y, main = "Rough Plus Trend (Fitted)", xlab = "Time", ylab = "Temperature")
+plot(x = temp.and.disasters$dt, y = temp.and.disasters$LandAverageTemperature, main = "Rough Plus Trend (Fitted)", xlab = "Time", ylab = "Temperature", type = "n")
+lines(temp.and.disasters$dt, temp.and.disasters$LandAverageTemperature, col = "black")
+lines(temp.and.disasters$dt, fitted(temp.ts.rough) + temp.trend$y, col = "blue", lwd = 2)
 plot.ts(temp.fc.rpt, main = "Rough Plus Trend (Forecasts)", xlab = "Time", ylab = "Temperature")
-plot.ts(fitted(temp.ts.diff), main = "First Difference (Fitted)", xlab = "Time", ylab = "Temperature")
+plot(x = temp.and.disasters$dt, y = temp.and.disasters$LandAverageTemperature, main = "First Difference (Fitted)", xlab = "Time", ylab = "Temperature", type = "n")
+lines(temp.and.disasters$dt, temp.and.disasters$LandAverageTemperature, col = "black")
+lines(temp.and.disasters$dt, fitted(temp.ts.diff), col = "blue", lwd = 2)
 plot.ts(temp.fc.diff$mean, main = "First Difference (Forecasts)", xlab = "Time", ylab = "Temperature")
-plot.ts(fitted(temp.ts.seas), main = "Seasonal Model (Fitted)", xlab = "Time", ylab = "Temperature")
+plot(x = temp.and.disasters$dt, y = temp.and.disasters$LandAverageTemperature, main = "Seasonal Model (Fitted)", xlab = "Time", ylab = "Temperature", type = "n")
+lines(temp.and.disasters$dt, temp.and.disasters$LandAverageTemperature, col = "black")
+lines(temp.and.disasters$dt, fitted(temp.ts.seas), col = "blue", lwd = 2)
 plot.ts(temp.fc.seas$mean, main = "Seasonal Model (Forecasts)", xlab = "Time", ylab = "Temperature")
 par(orig.par)
 ```
@@ -228,13 +249,13 @@ Here we display the results of fitting the three previously described models aga
 
 The auto-generated seasonal model produces a smoother plot than the rough plus trend and first difference models.  This is not necessarily a good thing, however, because we would like to keep the individual fluctuations present in the original data when making new predictions.  Looking at AIC values may help us decide which model is best for forecasting.  The AIC values for the rough plus trend, first difference, and seasonal models are `r temp.ts.rough$aic`, `r temp.ts.diff$aic`, and `r temp.ts.seas$aic`, respectively.  We choose the best model by choosing the model with the lowest AIC value - in this case the rough plus trend model.
 
-The ten-year forecasts for the three models look significantly different.  Rough plus trend shows variations only up to the third year and then simply follows a straight upward-sloping line, corresponding to the trend.  This is due to the fact that MA models of order *q* only provide random variance up to the *$q_{th}$* forecasted year.  The first difference forecast shows some amount of variance through all ten forecasted years while also seeming to follow the trend.  This makes it seem promising in its predictive value.  The seasonal model forecast is a constantly upward-sloping line which follows the trend but provides no random variance.
+The ten-year forecasts for the three models look significantly different.  Rough plus trend shows variations only up to the third year and then simply follows a straight upward-sloping line, corresponding to the trend.  This is due to the fact that MA models of order *q* only provide random variance up to the *$q^{th}$* forecasted year.  The first difference forecast shows some amount of variance through all ten forecasted years while also seeming to follow the trend.  This makes it seem promising in its predictive value.  The seasonal model forecast is a constantly upward-sloping line which follows the trend but provides no random variance.
 
 Based on the AIC criterion and the forecast plots, it seems that we can rule out the seasonal model.  The first difference model appears to be best if we need a model that provides accurate yearly fluctuations for more than three years, whereas the rough plus trend model seems to be the most likely to give the most accurate average prediction.
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
 # Plot forecast and historical data (last 10 years) from assumed best models
-combined.rough.ts <- ts(c(fitted(temp.ts.rough)[107:116], temp.fc.rough$mean))
+combined.rough.ts <- ts(c(temp.trend$y[107:116]+fitted(temp.ts.rough)[107:116], temp.fc.rpt))
 p1 <- ggplot() +
   labs(title = "Rough Plus Trend (Historical and Forecast)", x = "Year", y = "Temperature") +
   theme(plot.title = element_text(hjust = 0.5)) +
@@ -251,9 +272,9 @@ p2 <- ggplot() +
 plot_grid(p1, p2, ncol = 1)
 ```
 
-We plot the last ten years of historical data and the ten forecasted years for the rough plus trend and first difference models above.  The red line indicates the point at which we go from fitting historical data to forecasting future years.  By zooming in on the data, we can see that both the fitted historical values and the forecasted values differ for the two models.
+We plot the fitted historical data for the past ten years and the forecasted data for the next ten years using the rough plus trend and first difference models above.  The red line indicates the point at which we go from fitting historical data to forecasting future years.  By zooming in on the data, we can see that both the fitted historical values and the forecasted values differ for the two models.
 
-### $\text{\underline{Categorization of Natural Disaster Type}}$
+### [Categorization\ of\ Natural\ Disaster\ Type]{.underline}
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
 ## Predictors of types of natural disasters ##
@@ -263,11 +284,11 @@ emissions.data.mod <- emissions.data %>% dplyr::select(country, year, co2, metha
 
 # Plots of emissions/temperatures over time
 title <- ggdraw() + draw_label("Temperature and Emissions Trends", fontface='bold')
-p1 <- ggplot(data = emissions.data.mod[!is.na(emissions.data.mod$methane),]) +
-  labs(x = "Year", y = "Emissions (million tonnes)") +
+p1 <- ggplot(data = emissions.data.mod[!is.na(emissions.data.mod$co2),]) +
+  labs(x = "Year", y = "Emissions (million tonnes CO2)") +
   geom_smooth(mapping = aes(x = year, y = co2))
 p2 <- ggplot(data = emissions.data.mod[!is.na(emissions.data.mod$methane),]) +
-  labs(x = "Year", y = "Emissions (million tonnes CO2e)") +
+  labs(x = "Year", y = "Emissions (million tonnes methane)") +
   geom_smooth(mapping = aes(x = year, y = methane))
 p3 <- ggplot(data = temp.data.mod) +
   labs(x = "Year", y = "Land Temperature") +
@@ -279,19 +300,126 @@ p <- plot_grid(p1, p2, p3, p4, ncol = 2)
 plot_grid(title, p, ncol = 1, rel_heights=c(0.4, 1))
 ```
 
-As wee can see from the plots above, $CO_2$ emissions and land and land-and-ocean average temperatures have rised since 1990.  The overall trend is the same for methane, but with a noticeable dip between 1990 and around 1996.
+As we can see from the plots above, $CO_2$ emissions and land and land-and-ocean average temperatures have risen since 1990.  The overall trend is the same for methane, but with a noticeable dip between 1990 and around 1996.
 
 The data that we have available for $\textbf{all}$ of these variables is on a shorter time period than for temperature alone (smaller sample size), so we must be sure to handle the data carefully and make sure no assumptions are violated in our analyses.
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
-# TODO: filter out only Climatological subgroup
-
 # Combine natural disasters, temperature, and emissions datasets for years in which there is
 # data for all three of them (1990-2016)
 nat.disasters <- data.frame(Year = disasters.data$Year, Type = disasters.data$Disaster.Type) %>% filter(Year >= 1990 & Year <= 2016)
 nat.disasters <- nat.disasters %>% left_join(temp.data.mod, by = c("Year" = "dt"), copy = TRUE) %>% left_join(emissions.data.mod, by = c("Year" = "year"), copy = TRUE)
 
-plot_ly(data = nat.disasters, x = nat.disasters$Type, y = nat.disasters$co2, z = nat.disasters$LandAverageTemperature, type = "scatter3d")
+# ANOVA on temperature, CO2, and methane
+aov.temp <- aov(LandAverageTemperature ~ Type, data = nat.disasters, na.action = na.exclude)
+tukey.temp <- TukeyHSD(aov.temp)
+aov.co2 <- aov(co2 ~ Type, data = nat.disasters)
+aov.methane <- aov(methane ~ Type, data = nat.disasters)
+
+# Classification of disaster type based on temperature and CO2
+pairs(nat.disasters[,c("LandAverageTemperature", "LandAndOceanAverageTemperature", "co2", "methane")])
+```
+
+We create plots of all three predictor variables against one another in order to determine if there is multicollinearity.  Strong multicollinearity appears to exist between land and land-and-ocean average temperatures and between $CO_2$ and methane.  Because of this, we should only keep one variable from each group; we choose to keep $CO_2$ and land average temperature.
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+# custom grid style
+axx <- list(
+  gridcolor='rgb(255, 255, 255)',
+  zerolinecolor='rgb(255, 255, 255)',
+  showbackground=TRUE,
+  backgroundcolor='rgb(230, 230,230)'
+)
+
+create_plotly_fig <- function(data, cat, plotnum) {
+  cat_data = data %>% filter(type == cat)
+  cat_probs = matrix(cat_data$prob, nrow = 50, ncol = 50)
+  fig = plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~cat_probs, scene = paste("scene", plotnum, sep="")) %>% add_surface(showscale = FALSE)
+  return(fig)
+}
+  
+create_scene <- function(cat, rid, cid, xcoord, ycoord, scene) {
+  return(list(domain=list(x=xcoord, y=ycoord, row=rid, column=cid),
+                   xaxis=c(axx, id=scene),
+                   yaxis=c(axx, id=scene),
+                   zaxis=c(axx, title=paste(cat, "Probability"), id=scene),
+                   aspectmode='cube'))
+
+}
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+# TODO: filter out only Climatological subgroup
+
+model_3d = multinom(as.factor(Type) ~ LandAverageTemperature + co2, data = nat.disasters, trace = FALSE)
+
+mintemp = min(nat.disasters$LandAverageTemperature, na.rm = TRUE)
+maxtemp = max(nat.disasters$LandAverageTemperature, na.rm = TRUE)
+minco2 = min(nat.disasters$co2, na.rm = TRUE)
+maxco2 = max(nat.disasters$co2, na.rm = TRUE)
+xygrid = expand.grid(LandAverageTemperature = seq(mintemp, maxtemp, len=50), co2 = seq(minco2, maxco2, len=50))
+
+z = as.data.frame(predict(model_3d, newdata = xygrid, type="probs"))
+z = pivot_longer(z, 1:ncol(z), names_to = "type", values_to = "prob")
+logit_figs = rep(0, 13)
+i <- 1
+
+storm_data = z %>% filter(type == "Storm")
+storm_probs = matrix(storm_data$prob, nrow = 50, ncol = 50)
+storms = plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~storm_probs, scene = paste("scene", 1, sep="")) %>% add_surface(showscale = FALSE)
+
+flood_data = z %>% filter(type == "Flood")
+flood_probs = matrix(flood_data$prob, nrow = 50, ncol = 50)
+floods = plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~flood_probs, scene = paste("scene", 2, sep="")) %>% add_surface(showscale = FALSE)
+
+wildfire_data = z %>% filter(type == "Wildfire")
+wildfire_probs = matrix(wildfire_data$prob, nrow = 50, ncol = 50)
+wildfires = plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~wildfire_probs, scene = paste("scene", 3, sep="")) %>% add_surface(showscale = FALSE)
+
+earthquake_data = z %>% filter(type == "Earthquake")
+earthquake_probs = matrix(earthquake_data$prob, nrow = 50, ncol = 50)
+earthquakes = plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~earthquake_probs, scene = paste("scene", 4, sep="")) %>% add_surface(showscale = FALSE)
+
+# individual plots
+fig1 <- plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~storm_probs, scene='scene1') 
+fig1 <- fig1 %>% add_surface(showscale=FALSE)
+
+fig2 <- plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~flood_probs, scene='scene2') 
+fig2 <- fig2 %>% add_surface(showscale=FALSE)
+
+fig3 <- plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~wildfire_probs, scene='scene3') 
+fig3 <- fig3 %>% add_surface(showscale=FALSE)
+
+fig4 <- plot_ly(x = seq(mintemp, maxtemp, len=50), y = seq(minco2, maxco2, len=50), z = ~earthquake_probs, scene='scene4') 
+fig4 <- fig4 %>% add_surface(showscale=FALSE)
+
+# subplot and define scene
+fig <- subplot(fig1, fig2, fig3, fig4)
+fig <- fig %>% layout(title = "Regressing Disasters on Temp and CO2",
+         scene = list(domain=list(x=c(0,0.5),y=c(0.5,1)),
+                      xaxis=c(axx, title="Temp"),
+                      yaxis=c(axx, title="CO2"),
+                      zaxis=c(axx, title="Storm Probability"),
+                      aspectmode='cube'),
+         scene2 = list(domain=list(x=c(0.5,1),y=c(0.5,1)),
+                       xaxis=c(axx, title="Temp"),
+                       yaxis=c(axx, title="CO2"),
+                       zaxis=c(axx, title="Flood Probability"),
+                       aspectmode='cube'),
+         scene3 = list(domain=list(x=c(0,0.5),y=c(0,0.5)),
+                       xaxis=c(axx, title="Temp"),
+                       yaxis=c(axx, title="CO2"),
+                       zaxis=c(axx, title="Wildfire Probability"),
+                       aspectmode='cube'),
+         scene4 = list(domain=list(x=c(0.5,1),y=c(0,0.5)),
+                       xaxis=c(axx, title="Temp"),
+                       yaxis=c(axx, title="CO2"),
+                       zaxis=c(axx, title="Earthquake Probability"),
+                       aspectmode='cube'))
+
+fig
+
+#plot_ly(data = nat.disasters, x = nat.disasters$LandAverageTemperature, y = nat.disasters$co2, z = nat.disasters$methane, type = "scatter3d") %>% add_surface(z = as.matrix(nat.disasters$methane))
 ggplot(data = nat.disasters) +
   labs(title = "Temperature and CO2 Emissions for Disaster Type", x = "Disaster Type", y = "Million Tonnes CO2") +
   theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(size = 9)) +
@@ -299,7 +427,42 @@ ggplot(data = nat.disasters) +
   scale_color_gradient(low = "yellow", high = "red")
 ```
 
-The two plots above (plotly not visible in PDF) are a representation of average land temperature and $CO_2$ emissions data points for each natural disaster type.  There isn't a very clear way to categorize natural disasters by the temperature and $CO_2$ emissions that we can observe by simply looking at these plots.  Therefore we will require more analytical methods to determine a way to separate them.
+```{r warning=FALSE, message=FALSE, echo=FALSE, eval=FALSE}
+fig1 <- create_plotly_fig(z, "Animal accident", 1)
+fig2 <- create_plotly_fig(z, "Drought", 2)
+fig3 <- create_plotly_fig(z, "Earthquake", 3)
+fig4 <- create_plotly_fig(z, "Epidemic", 4)
+fig5 <- create_plotly_fig(z, "Extreme temperature ", 5)
+fig6 <- create_plotly_fig(z, "Flood", 6)
+fig7 <- create_plotly_fig(z, "Impact", 7)
+fig8 <- create_plotly_fig(z, "Insect infestation", 8)
+fig9 <- create_plotly_fig(z, "Landslide", 9)
+fig10 <- create_plotly_fig(z, "Mass movement (dry)", 10)
+fig11 <- create_plotly_fig(z, "Storm", 11)
+fig12 <- create_plotly_fig(z, "Volcanic activity", 12)
+fig13 <- create_plotly_fig(z, "Wildfire", 13)
+
+# subplot and define scene
+fig <- subplot(fig1, fig2, fig3, fig4, fig5, fig6, fig7, fig8, fig9, fig10, fig11, fig12, fig13, nrows = 4)
+fig <- fig %>% layout(title = "Regressing Disasters on Temp and CO2",
+         scene = create_scene("Animal accident", 0, 0, c(0,0.5), c(1.5,2), 1),
+         scene2 = create_scene("Drought", 0, 1, c(0.5,1), c(1.5,2), 2),
+         scene3 = create_scene("Earthquake", 0, 2, c(1,1.5), c(1.5,2), 3),
+         scene4 = create_scene("Epidemic", 0, 3, c(1.5,2), c(1.5,2), 4),
+         scene5 = create_scene("Extreme temperature", 1, 0, c(0,0.5), c(1,1.5), 5),
+         scene6 = create_scene("Flood", 1, 1, c(0.5,1), c(1,1.5), 6),
+         scene7 = create_scene("Impact", 1, 2, c(1,1.5), c(1,1.5), 7),
+         scene8 = create_scene("Insect infestation", 1, 3, c(1.5,2), c(1,1.5), 8),
+         scene9 = create_scene("Landslide", 2, 0, c(0,0.5), c(0.5,1), 9),
+         scene10 = create_scene("Mass movement (dry)", 2, 1, c(0.5,1), c(0.5,1), 10),
+         scene11 = create_scene("Storm", 2, 2, c(1,1.5), c(0.5,1), 11),
+         scene12 = create_scene("Volcanic activity", 2, 3, c(1.5,2), c(0.5,1), 12),
+         scene13 = create_scene("Wildfire", 3, 0, c(0.75,1.25), c(0,0.5), 13)
+         )
+fig
+```
+
+The two plots above are a representation of average land temperature and $CO_2$ emissions data points for each natural disaster type.  There isn't a very clear way to categorize natural disasters by the temperature and $CO_2$ emissions that we can observe by simply looking at these plots.  Therefore we will require more analytical methods to determine a way to separate them.
 
 One thing to notice from the color-coded plot of temperature is that it appears that, though usually directly proportional to emissions levels, there are some higher temperature points that occur near the middle of the emissions spectrum.  Therefore, emissions cannot be the only driver of increases in global temperature.
 
@@ -319,37 +482,6 @@ Here we separate out the factors of $CO_2$ emissions and average land temperatur
 For the second plot, the median $CO_2$ levels do seem a bit more spread out than for temperature.  It is important to mention, however, that while differences observed between medians among boxplots may indicate a *noteable* difference in the true mean values of the measured variable, they do not necessarily indicate a statistically *significant* difference.
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
-# ANOVA on temperature, CO2, and methane
-aov.temp <- aov(LandAverageTemperature ~ Type, data = nat.disasters, na.action = na.exclude)
-tukey.temp <- TukeyHSD(aov.temp)
-aov.co2 <- aov(co2 ~ Type, data = nat.disasters)
-aov.methane <- aov(methane ~ Type, data = nat.disasters)
-
-# Classification of disaster type based on temperature and CO2
-pairs(nat.disasters[,c("LandAverageTemperature", "co2", "methane")])
-```
-
-We create plots of all three predictor variables against one another in order to determine if there is multicollinearity.  Multicollinearity appears to exist for $CO_2$ and methane.  Because of this, one of the variables should be removed from our analysis.  We choose to remove methane.
-
-```{r warning=FALSE, message=FALSE, echo=FALSE}
-par(mfrow = c(2,1))
-hist(nat.disasters$LandAverageTemperature)
-hist(nat.disasters$co2)
-par(orig.par)
-```
-
-We plot histograms of the remaining two predictors, land average temperature and $CO_2$.  Neither appears to be normally distributed, so we should not use a method of classification which requires normality of predictors such as linear discriminant analysis (LDA).  We choose to use quadratic discriminant analysis (QDA), which will work with non-normal predictors.
-
-```{r warning=FALSE, message=FALSE, echo=FALSE}
-# CO2 and methane appear to be multicollinear and LandAverageTemperature and CO2 are both NOT normally distributed.  Therefore, use qda.
-nat.disasters.mod <- nat.disasters %>% filter(!(Type %in% c("Animal accident", "Impact"))) %>% dplyr::select(LandAverageTemperature, co2, Type)
-
-set.seed(123)
-train.ind <- sample(1:nrow(nat.disasters.mod), size = 0.7 * nrow(nat.disasters.mod), replace = FALSE)
-train <- nat.disasters.mod[train.ind,]
-test <- nat.disasters.mod[-train.ind,]
-temp.co2.qda <- qda(Type ~ LandAverageTemperature + co2, data = train)
-
 # Obtained from https://stackoverflow.com/questions/49719660/r-markdown-to-pdf-printing-console-output
 print_output <- function(output, cex = 0.5) {
   tmp <- capture.output(output)
@@ -358,6 +490,23 @@ print_output <- function(output, cex = 0.5) {
   box()
 }
 ```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+# CO2 and methane appear to be multicollinear and LandAverageTemperature and CO2 are both NOT normally distributed.  Therefore, use qda.
+nat.disasters.mod <- nat.disasters %>% filter(!(Type %in% c("Animal accident", "Impact"))) %>% dplyr::select(LandAverageTemperature, co2, Type) %>% drop_na()
+
+mvns = c()
+for (t in unique(nat.disasters.mod$Type)) {
+  d <- nat.disasters.mod %>% filter(Type == t) %>% dplyr::select(LandAverageTemperature, co2)
+  res <- mvn(data = d, mvnTest = "hz")
+  mvns <- append(mvns, res$multivariateNormality["MVN"])
+}
+names(mvns) <- unique(nat.disasters.mod$Type)
+```
+
+We removed disaster categories with only 2 observations (Animal accidents and Impacts) and ran Henze-Zirkler tests on each of the disaster categories to test for multivariate normality and Box's M test for equality of covariance. We find that none of the categories have normal distributions and they do not have equal covariance (p=0.05).
+
+Since neither normality nor equal covariance holds, this rules out using Linear Discriminant Analysis (LDA). Quadratic Discriminant Analysis (QDA) is similar to LDA except that it doesn't require the assumption of equal covariance and can be robust to non-normal data. Another method that could work well for non-normal unequal covariance data would be Support Vector Machines (SVM).
 
 The QDA method involves finding the class, k, which maximizes the following function:
 
@@ -378,7 +527,14 @@ $\pi_k$ is the prior probability of class k$^{[6]}$
 Before beginning our classification of disaster type by average land temperature and $CO_2$ emission level, we filter "Animal accident" and "Impact" out of our dataset because they have a very small number of observations.  We then randomly split all of our roughly 20,000 observations into a training set with 70% of the observations and a test set with the remaining 30% of observations.  We train the training set on a QDA model and get the following results:
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
-print_output(temp.co2.qda)
+set.seed(123)
+train.ind <- sample(1:nrow(nat.disasters.mod), size = 0.7 * nrow(nat.disasters.mod), replace = FALSE)
+train <- nat.disasters.mod[train.ind,]
+test <- nat.disasters.mod[-train.ind,]
+temp.co2.qda <- qda(Type ~ LandAverageTemperature + co2, data = train)
+
+#print_output(temp.co2.qda)
+temp.co2.qda
 ```
 
 \newpage
@@ -389,12 +545,13 @@ We then use our QDA model to predict the data from our test set and check our pr
 pred.qda <- predict(temp.co2.qda, test)
 conf.qda <- confusionMatrix(as.factor(test$Type), pred.qda$class)
 
-print_output(conf.qda, cex = 0.4)
+#print_output(conf.qda, cex = 0.4)
+conf.qda
 ```
 
-We can see from the confusion matrix that the model predicted every test point to of type "Flood" or "Storm", which led to a prediction accuracy of only 36.26%.  There could be several reasons for this behavior including the number of observations from each class being widely different or the mean values of the two predictors being too similar among the classes.
+We can see from the confusion matrix that the model predicted every test point to of type "Flood" or "Storm", which led to a prediction accuracy of only 36.17%.  There could be several reasons for this behavior including the number of observations from each class being widely different (imbalanced data) or the mean values of the two predictors being too similar among the classes.
 
-For this reason, we chose to replicate the test with a subset of the original observations.  We took 500 randomized observations from the disaster types "Flood", "Wildfire", and "Earthquake".  These were chosen because we hypothesized that they were events that would occur in different climatological settings (i.e. different mean temperature and $CO_2$ levels) and they had enough observations to obtain a reasonably-sized and equal sample from each.
+For this reason, we chose to replicate the test with a subset of the original observations.  We took 500 randomized observations from each of the disaster types "Flood", "Wildfire", and "Earthquake".  These were chosen because we hypothesized that they were events that would occur in different climatological settings (i.e. different mean temperature and $CO_2$ levels) and they had enough observations to obtain a reasonably-sized and equal sample from each.
 
 \newpage
 
@@ -402,20 +559,93 @@ Repeating the test with this subset yielded the following results:
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
 set.seed(456)
-nat.disasters.mod <- nat.disasters %>% filter((Type %in% c("Flood", "Wildfire", "Earthquake"))) %>% dplyr::select(LandAverageTemperature, co2, Type) %>% group_by(Type) %>% slice_sample(n = 500)
+nat.disasters.mod2 <- nat.disasters.mod %>% filter((Type %in% c("Flood", "Wildfire", "Earthquake"))) %>% dplyr::select(LandAverageTemperature, co2, Type) %>% group_by(Type) %>% drop_na() %>% slice_sample(n = 500)
 
-train.ind <- sample(1:nrow(nat.disasters.mod), size = 0.7 * nrow(nat.disasters.mod), replace = FALSE)
-train <- nat.disasters.mod[train.ind,]
-test <- nat.disasters.mod[-train.ind,]
-temp.co2.qda <- qda(Type ~ LandAverageTemperature + co2, data = train)
+train.ind.red <- sample(1:nrow(nat.disasters.mod2), size = 0.7 * nrow(nat.disasters.mod2), replace = FALSE)
+train.red <- nat.disasters.mod2[train.ind.red,]
+test.red <- nat.disasters.mod2[-train.ind.red,]
+temp.co2.qda <- qda(Type ~ LandAverageTemperature + co2, data = train.red)
 
-pred.qda <- predict(temp.co2.qda, test)
-conf.qda <- confusionMatrix(as.factor(test$Type), pred.qda$class)
+pred.qda <- predict(temp.co2.qda, test.red)
+conf.qda <- confusionMatrix(as.factor(test.red$Type), pred.qda$class)
 
-print_output(conf.qda, cex = 0.4)
+#print_output(conf.qda, cex = 0.4)
+conf.qda
 ```
 
-We can see that we now get predictions in all three categories and the prediction accuracy has increased to 44.91%.  This is still not an optimal prediction accuracy, so other solutions to the classification problem should be attempted.
+We can see that we now get predictions in all three categories but the prediction accuracy only increased by just over 1% to 37.33%.  This is still not an optimal prediction accuracy, so other solutions to the classification problem should be attempted.
+
+Since QDA didn't give optimal results we attempt SVM in case the QDA model was not robust to the violation of normality of the data.
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+temp.co2.svm <- svm(as.factor(Type) ~ LandAverageTemperature + co2, data = train)
+pred.svm <- predict(temp.co2.svm, test)
+conf.svm <- confusionMatrix(as.factor(test$Type), pred.svm)
+#print_output(conf.svm, cex = 0.4)
+conf.svm
+
+temp.co2.svm <- svm(as.factor(Type) ~ LandAverageTemperature + co2, data = train.red)
+pred.svm <- predict(temp.co2.svm, test.red)
+conf.svm <- confusionMatrix(as.factor(test.red$Type), pred.svm)
+#print_output(conf.svm, cex = 0.4)
+conf.svm
+```
+
+Again, we only get observations classified as Flood and Storm when classifying all disaster types with only a less than 1% increase in accuracy from the QDA model to 37.05%. It should also be mentioned that due to SVM's increased complexity with more categories of the prediction variable, the model takes quite a bit longer to train than the QDA model. However, the reduced dataset (500 observations each of Earthquake, Flood, and Wildfire) has 41.56% accuracy, an over 4% increase from the reduced QDA model, and doesn't take significantly longer to train.
+
+A final attempted solution is to artificially balance the data. We try both upsampling the minority classes to the size of the majority class and mixed upsampling and downsampling so that all classes have 500 observations. We get the following results:
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+set.seed(789)
+nat.disasters.mod3 <- nat.disasters.mod %>% dplyr::select(LandAverageTemperature, co2, Type) %>% drop_na()
+
+## Up Sampling
+
+balanced.disasters.up <- nat.disasters.mod3
+max_num <- max(count(nat.disasters.mod3, Type)$n)
+
+for (t in unique(nat.disasters.mod3$Type)) {
+  diff <- max_num - sum(nat.disasters.mod3$Type == t)
+  
+  if (diff > 0) {
+    balanced.disasters.up <- rbind(balanced.disasters.up, slice_sample(filter(nat.disasters.mod3, nat.disasters.mod3$Type == t), n = diff, replace = TRUE))
+  }
+}
+
+train.ind.up <- sample(1:nrow(balanced.disasters.up), size = 0.7 * nrow(balanced.disasters.up), replace = FALSE)
+train.up <- balanced.disasters.up[train.ind.up,]
+test.up <- balanced.disasters.up[-train.ind.up,]
+
+temp.co2.svm <- svm(as.factor(Type) ~ LandAverageTemperature + co2, data = train.up)
+pred.svm <- predict(temp.co2.svm, test.up)
+conf.svm <- confusionMatrix(as.factor(test.up$Type), pred.svm)
+conf.svm
+
+## Down Sampling
+
+balanced.disasters.down <- data.frame()
+
+for (t in unique(nat.disasters.mod3$Type)) {
+  if (count(filter(nat.disasters.mod3, nat.disasters.mod3$Type == t)) < 500) {
+    balanced.disasters.down <- rbind(balanced.disasters.down, slice_sample(filter(nat.disasters.mod3, nat.disasters.mod3$Type == t), n = 500, replace = TRUE))
+  }
+  else {
+    balanced.disasters.down <- rbind(balanced.disasters.down, slice_sample(filter(nat.disasters.mod3, nat.disasters.mod3$Type == t), n = 500, replace = FALSE))
+  }
+}
+
+train.ind.down <- sample(1:nrow(balanced.disasters.down), size = 0.7 * nrow(balanced.disasters.down), replace = FALSE)
+train.down <- balanced.disasters.down[train.ind.down,]
+test.down <- balanced.disasters.down[-train.ind.down,]
+
+temp.co2.svm <- svm(as.factor(Type) ~ LandAverageTemperature + co2, data = train.down)
+pred.svm <- predict(temp.co2.svm, test.down)
+conf.svm <- confusionMatrix(as.factor(test.down$Type), pred.svm)
+conf.svm
+#print_output(conf.svm, cex = 0.4)
+```
+
+We get accuracies of 21.32% and 20.9% for the SVM models using upsampled and mixed up/downsampled data, respectively. These are significant reductions from all of the previous methods. We still see two disaster types (Earthquake and Storm) not predicted by the upsampled model and one type (Storm) not classified by the mixed up/downsampled model. The one benefit of using these models appears to be that many of the disaster types have non-null and reasonably high sensitivity and specificity values, which previous models including all disaster types did not. This means that the up/downsampled models may do a better job of differentiating between the disaster types.
 
 # Conclusion
 
@@ -449,229 +679,5 @@ The discoveries made in this report lead us to believe that more research must b
 
 ## Code Appendix
 
-```{r warning=FALSE, message=FALSE, echo=TRUE, eval=FALSE}
-# Load libraries and data
-library(datetime)
-library(dplyr)
-library(ggplot2)
-library(sigmoid)
-library(cowplot)
-library(plotly)
-library(forecast)
-library(MASS)
-
-disasters1.data <- read.csv('./data/DISASTERS/1900_2021_DISASTERS.xlsx - emdat data.csv')
-disasters2.data <- read.csv('./data/DISASTERS/1970-2021_DISASTERS.xlsx - emdat data.csv')
-temp.data <- read.csv('./data/GlobalTemperatures.csv')
-emissions.data <- read.csv('data/owid-co2-data.txt', header = TRUE)
-
-# Combine data from two disasters datasets
-common <- match(colnames(disasters1.data), colnames(disasters2.data))
-disasters2.data <- disasters2.data[,common]
-disasters.data <- rbind(disasters1.data, disasters2.data)
-
-# Histogram of all disasters per year
-hist(disasters.data$Year, xlab = "Year", main = "Total Global Disasters per Year")
-
-# Get data on CA fires
-fire.data <- disasters.data[disasters.data$Disaster.Type == "Wildfire",]
-row.condition <- Reduce(union, list(grep("cali", fire.data$Location, ignore.case = TRUE),
-                 grep("los angeles", fire.data$Location, ignore.case = TRUE),
-                 grep("Oakland", fire.data$Location),
-                 grep("San Diego", fire.data$Location)))
-cali.fires <- fire.data[row.condition,]
-
-# Histogram of CA fires per year
-hist(cali.fires$Year, xlab = "Year", main = "California Fires per Year")
-
-# Get temperature data in desired format
-temp.data.mod <- temp.data
-temp.data.mod$dt <- as.date(temp.data.mod$dt, format = "%Y-%m-%d")
-temp.data.mod <- temp.data.mod[temp.data.mod$dt > as.date("1899", format = "%Y"),]
-temp.data.mod$dt <- as.numeric(format(temp.data.mod$dt, format = "%Y"))
-temp.data.mod <- temp.data.mod %>% group_by(dt) %>% summarize(LandAverageTemperature = mean(LandAverageTemperature),
-                                                              LandAverageTemperatureUncertainty = mean(LandAverageTemperatureUncertainty),
-                                                              LandAndOceanAverageTemperature = mean(LandAndOceanAverageTemperature),
-                                                              LandAndOceanAverageTemperatureUncertainty = mean(LandAndOceanAverageTemperatureUncertainty))
-
-# Plot of average land temperature over time
-ggplot(data = temp.data.mod, mapping = aes(x = dt, y = LandAverageTemperature)) +
-  ylim(min(temp.data.mod$LandAverageTemperature), max(temp.data.mod$LandAverageTemperature)) +
-  labs(title = "Land Average Temperature by Year", x = "Year", y = "Temperature") +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  geom_point() + geom_smooth()
-
-# Get number of disasters per year up to 2016
-disasters.data.mod <- disasters.data
-disasters.data.mod <- disasters.data.mod[disasters.data.mod$Year < 2016,]
-disasters.data.mod <- disasters.data.mod %>% group_by(Year) %>% summarize(n = n())
-
-# Join temperature and disaster datasets
-temp.and.disasters <- dplyr::inner_join(temp.data.mod, disasters.data.mod, by = c("dt" = "Year"))
-
-# Plot of number of disasters against average land temperature
-ggplot(data = temp.and.disasters, mapping = aes(x = LandAverageTemperature, y = n)) +
-  ylim(min(temp.and.disasters$n), max(temp.and.disasters$n)) +
-  labs(title = "Number of Disasters for each Temperature", x = "Temperature", y = "Disasters") +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  geom_point() + geom_smooth()
-
-# Linear model with response number of disasters and predictor average land temperature using sigmoid
-num.disasters.v.temp <- lm(n ~ sigmoid(LandAverageTemperature - 50, "logistic"), data = temp.and.disasters)
-p1 <- ggplot(data = temp.and.disasters) +
-  labs(title = "Land Average Temperature by Year (Fitted)", x = "Temperature", y = "Disasters") +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  geom_point(mapping = aes(x = LandAverageTemperature, y = n)) +
-  geom_line(mapping = aes(x = LandAverageTemperature, y = num.disasters.v.temp$fitted.values), size = 1, color = 'blue')
-
-# Fit using splines
-spline.model <- smooth.spline(x = temp.and.disasters$LandAverageTemperature, y = temp.and.disasters$n, nknots = 6)
-p2 <- ggplot(data = temp.and.disasters) +
-  labs(x = "Temperature", y = "Disasters") +
-  geom_point(mapping = aes(x = LandAverageTemperature, y = n)) +
-  geom_line(mapping = aes(x = spline.model$x, y = spline.model$y), size = 1, color = 'blue')
-plot_grid(p1, p2, ncol = 1)
-
-## Time series projections ##
-
-# Fit a trend model of land temperatures against time
-temp.trend <- smooth.spline(x = temp.and.disasters$dt, y = temp.and.disasters$LandAverageTemperature, nknots = 5)
-
-# Plot ACF and PACF for raw data, first difference of data, and data with trend removed
-orig.par <- par()
-par(mfrow = c(3,2), mar = c(3,4,3,2))
-acf(temp.and.disasters$LandAverageTemperature, main = "ACF (raw data)")
-pacf(temp.and.disasters$LandAverageTemperature, main = "PACF (raw data)")
-
-acf((temp.and.disasters$LandAverageTemperature - temp.trend$y), main = "ACF (rough part)")
-pacf((temp.and.disasters$LandAverageTemperature - temp.trend$y), main = "PACF (rough part)")
-
-acf(diff(temp.and.disasters$LandAverageTemperature, lag = 1), main = "ACF (first difference)")
-pacf(diff(temp.and.disasters$LandAverageTemperature, lag = 1), main = "PACF (first difference)")
-par(orig.par)
-
-# Generate rough, first difference, and seasonal models
-temp.ts.rough <- arima((temp.and.disasters$LandAverageTemperature - temp.trend$y), order = c(0,0,3))
-temp.ts.diff <- arima(temp.and.disasters$LandAverageTemperature, order = c(3,1,0))
-temp.ts.seas <- auto.arima(temp.and.disasters$LandAverageTemperature, seasonal = TRUE)
-
-# Generate forecasts for the next 10 years from each model
-temp.fc.rough <- forecast(temp.ts.rough, h = 10)
-temp.fc.diff <- forecast(temp.ts.diff, h = 10)
-temp.fc.seas <- forecast(temp.ts.seas, h = 10)
-temp.fc.rpt <- temp.fc.rough$mean + predict(temp.trend$fit, 2016:2025)$y
-
-# Plot the fitted models and forecasts
-par(mfrow = c(3,2), mar = c(3,4,3,2))
-plot.ts(fitted(temp.ts.rough) + temp.trend$y, main = "Rough Plus Trend (Fitted)")
-plot.ts(temp.fc.rpt, main = "Rough Plus Trend (Forecasts)")
-plot.ts(fitted(temp.ts.diff), main = "First Difference (Fitted)")
-plot.ts(temp.fc.diff$mean, main = "First Difference (Forecasts)")
-plot.ts(fitted(temp.ts.seas), main = "Seasonal Model (Fitted)")
-plot.ts(temp.fc.seas$mean, main = "Seasonal Model (Forecasts)")
-par(orig.par)
-
-# Plot forecast and historical data (last 10 years) from assumed best models
-combined.rough.ts <- ts(c(fitted(temp.ts.rough)[107:116], temp.fc.rough$mean))
-p1 <- ggplot() +
-  labs(title = "Rough Plus Trend (Historical and Forecast)", x = "Year", y = "Temperature") +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  geom_line(mapping = aes(x = 2007:2026, y = combined.rough.ts)) +
-  geom_vline(xintercept = 2017, color = 'red')
-
-combined.diff.ts <- ts(c(fitted(temp.ts.diff)[107:116], temp.fc.diff$mean))
-p2 <- ggplot() +
-  labs(title = "First Difference (Historical and Forecast)", x = "Year", y = "Temperature") +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  geom_line(mapping = aes(x = 2007:2026, y = combined.diff.ts)) +
-  geom_vline(xintercept = 2017, color = 'red')
-
-plot_grid(p1, p2, ncol = 1)
-
-## Predictors of types of natural disasters ##
-
-# Modify emissions data to only include global data and select needed variables
-emissions.data.mod <- emissions.data %>% dplyr::select(country, year, co2, methane) %>% filter(country == 'World')
-
-# Plots of emissions/temperatures over time
-p1 <- ggplot(data = emissions.data.mod[!is.na(emissions.data.mod$methane),]) + labs(y = "Emissions (million tonnes)") +
-  geom_smooth(mapping = aes(x = year, y = co2))
-p2 <- ggplot(data = emissions.data.mod[!is.na(emissions.data.mod$methane),]) + labs(y = "Emissions (million tonnes CO2e)") +
-  geom_smooth(mapping = aes(x = year, y = methane))
-p3 <- ggplot(data = temp.data.mod) +
-  geom_smooth(mapping = aes(x = dt, y = LandAverageTemperature))
-p4 <- ggplot(data = temp.data.mod) +
-  geom_smooth(mapping = aes(x = dt, y = LandAndOceanAverageTemperature))
-plot_grid(p1, p2, p3, p4, ncol = 2)
-
-# TODO: filter out only Climatological subgroup
-
-# Combine natural disasters, temperature, and emissions datasets for years in which there is
-# data for all three of them (1990-2016)
-nat.disasters <- data.frame(Year = disasters.data$Year, Type = disasters.data$Disaster.Type) %>% filter(Year >= 1990 & Year <= 2016)
-nat.disasters <- nat.disasters %>% left_join(temp.data.mod, by = c("Year" = "dt"), copy = TRUE) %>% left_join(emissions.data.mod, by = c("Year" = "year"), copy = TRUE)
-
-plot_ly(data = nat.disasters, x = nat.disasters$Type, y = nat.disasters$co2, z = nat.disasters$LandAverageTemperature, type = "scatter3d")
-ggplot(data = nat.disasters) +
-  labs(title = "Temperature and CO2 Emissions for Disaster Type", x = "Disaster Type", y = "Million Tonnes CO2") +
-  theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(size = 9)) +
-  geom_point(mapping = aes(x = Type, y = co2, colour = LandAverageTemperature), size = 5) +
-  scale_color_gradient(low = "yellow", high = "red")
-
-# Boxplots of temperatures and CO2 levels at which disasters occur
-p1 <- ggplot(data = nat.disasters) +
-  geom_boxplot(mapping = aes(x = Type, y = LandAverageTemperature)) +
-  theme(axis.text.x = element_text(size = 5))
-p2 <- ggplot(data = nat.disasters) +
-  geom_boxplot(mapping = aes(x = Type, y = co2)) +
-  theme(axis.text.x = element_text(size = 5))
-plot_grid(p1, p2, ncol = 1)
-
-# ANOVA on temperature, CO2, and methane
-aov.temp <- aov(LandAverageTemperature ~ Type, data = nat.disasters, na.action = na.exclude)
-tukey.temp <- TukeyHSD(aov.temp)
-aov.co2 <- aov(co2 ~ Type, data = nat.disasters)
-aov.methane <- aov(methane ~ Type, data = nat.disasters)
-
-# Classification of disaster type based on temperature and CO2
-pairs(nat.disasters[,c("LandAverageTemperature", "co2", "methane")])
-hist(nat.disasters$LandAverageTemperature)
-hist(nat.disasters$co2)
-
-# CO2 and methane appear to be multicollinear and LandAverageTemperature and CO2 are both NOT normally distributed.  Therefore, use qda.
-nat.disasters.mod <- nat.disasters %>% filter(!(Type %in% c("Animal accident", "Impact"))) %>% dplyr::select(LandAverageTemperature, co2, Type)
-
-set.seed(123)
-train.ind <- sample(1:nrow(nat.disasters.mod), size = 0.7 * nrow(nat.disasters.mod), replace = FALSE)
-train <- nat.disasters.mod[train.ind,]
-test <- nat.disasters.mod[-train.ind,]
-temp.co2.qda <- lda(Type ~ LandAverageTemperature + co2, data = train)
-
-# Obtained from https://stackoverflow.com/questions/49719660/r-markdown-to-pdf-printing-console-output
-print_output <- function(output, cex = 0.7) {
-  tmp <- capture.output(output)
-  plot.new()
-  text(0, 1, paste(tmp, collapse='\n'), adj = c(0,1), family = 'mono', cex = cex)
-  box()
-}
-
-print_output(temp.co2.qda)
-
-pred.qda <- predict(temp.co2.qda, test)
-conf.qda <- confusionMatrix(as.factor(test$Type), pred.qda$class)
-
-print_output(conf.qda, cex = 0.4)
-
-set.seed(456)
-nat.disasters.mod <- nat.disasters %>% filter((Type %in% c("Flood", "Wildfire", "Earthquake"))) %>% dplyr::select(LandAverageTemperature, co2, Type) %>% group_by(Type) %>% slice_sample(n = 500)
-
-train.ind <- sample(1:nrow(nat.disasters.mod), size = 0.7 * nrow(nat.disasters.mod), replace = FALSE)
-train <- nat.disasters.mod[train.ind,]
-test <- nat.disasters.mod[-train.ind,]
-temp.co2.qda <- qda(Type ~ LandAverageTemperature + co2, data = train)
-
-pred.qda <- predict(temp.co2.qda, test)
-conf.qda <- confusionMatrix(as.factor(test$Type), pred.qda$class)
-
-print_output(conf.qda, cex = 0.4)
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
 ```
